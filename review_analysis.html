@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Customer Review Analysis Platform</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Helvetica Neue',sans-serif;background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);min-height:100vh;color:#fff}
+.app-wrapper{display:flex;min-height:100vh}
+.sidebar{width:280px;min-width:260px;background:linear-gradient(180deg,#0f3460 0%,#16213e 100%);border-right:1px solid rgba(255,255,255,0.1);padding:1.5rem 1.2rem;display:flex;flex-direction:column;gap:1rem;position:sticky;top:0;height:100vh;overflow-y:auto}
+.main-content{flex:1;padding:1.5rem 2rem;overflow-x:hidden}
+@media(max-width:768px){
+  .app-wrapper{flex-direction:column}
+  .sidebar{width:100%;height:auto;position:relative}
+  .main-content{padding:1rem}
+  .metrics-grid{grid-template-columns:repeat(2,1fr)!important}
+}
+.main-title{font-size:2rem;font-weight:700;background:linear-gradient(90deg,#00d9ff,#00ff88);-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-align:center;padding:.8rem 0 .4rem}
+.main-sub{text-align:center;color:#ccc;margin-bottom:1.5rem;font-size:.9rem}
+.upload-section{background:rgba(0,217,255,0.06);border:2px dashed rgba(0,217,255,0.4);border-radius:16px;padding:1.5rem;text-align:center;margin-bottom:1.5rem;transition:all .3s}
+.upload-section:hover{border-color:#00d9ff;background:rgba(0,217,255,0.1)}
+.upload-section h3{color:#00d9ff;margin-bottom:.5rem;font-size:1rem}
+.upload-section p{color:#aaa;font-size:.8rem;margin-bottom:1rem}
+.upload-btn{display:inline-block;background:linear-gradient(90deg,#00d9ff,#00ff88);color:#1a1a2e;font-weight:700;border:none;border-radius:12px;padding:.6rem 1.8rem;cursor:pointer;font-size:.95rem;transition:all .3s}
+.upload-btn:hover{transform:scale(1.05);box-shadow:0 5px 20px rgba(0,217,255,0.4)}
+#fileInput{display:none}
+.file-status{margin-top:1rem;font-size:.82rem;color:#aaa;line-height:1.8}
+.file-ok{color:#00ff88}.file-missing{color:#ff6b6b}
+.sidebar-title{font-size:1.1rem;font-weight:700;color:#fff;margin-bottom:.5rem}
+.filter-label{color:#00d9ff;font-weight:600;font-size:.82rem;margin-bottom:.3rem;margin-top:.8rem}
+.filter-select{width:100%;background:#0d2b50;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:.5rem .8rem;font-size:.88rem;outline:none;cursor:pointer}
+.filter-select option{background:#0d2b50;color:#fff}
+.sidebar-divider{border:none;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.2),transparent);margin:.8rem 0}
+.filter-summary{background:rgba(255,255,255,0.05);padding:.8rem;border-radius:10px;font-size:.82rem;line-height:1.9;color:#ccc}
+.filter-summary strong{color:#fff}
+.legend-tags{display:flex;flex-direction:column;gap:.4rem;margin-top:.3rem}
+.tag{display:inline-block;padding:.25rem .8rem;border-radius:20px;font-size:.8rem;font-weight:600}
+.tag-logistics{background:rgba(255,177,66,0.2);color:#ffb142}
+.tag-goods{background:rgba(255,107,107,0.2);color:#ff6b6b}
+.tag-perception{background:rgba(0,217,255,0.2);color:#00d9ff}
+.metrics-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem}
+.metric-card{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:1.2rem 1rem;text-align:center}
+.metric-value{font-size:2rem;font-weight:700;color:#fff}
+.metric-label{font-size:.82rem;color:#ccc;margin-top:.3rem}
+.section-divider{border:none;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.2),transparent);margin:1.5rem 0}
+.tabs-nav{display:flex;gap:.5rem;background:rgba(255,255,255,0.03);border-radius:12px;padding:.4rem;margin-bottom:1.2rem;flex-wrap:wrap}
+.tab-btn{background:transparent;border:none;color:#fff;font-weight:600;padding:.6rem 1.2rem;border-radius:8px;cursor:pointer;font-size:.88rem;transition:all .2s;white-space:nowrap}
+.tab-btn:hover{background:rgba(255,255,255,0.07)}
+.tab-btn.active{background:linear-gradient(90deg,#00d9ff,#00ff88);color:#1a1a2e}
+.tab-panel{display:none}.tab-panel.active{display:block}
+.chart-container{background:rgba(255,255,255,0.03);border-radius:20px;padding:1.2rem;border:1px solid rgba(255,255,255,0.08);margin:.8rem 0}
+
+/* 图表头部：标题 + 下载按钮 */
+.chart-header{display:flex;align-items:center;justify-content:flex-end;margin-bottom:.6rem;gap:.6rem}
+.chart-header-title{font-size:.9rem;font-weight:600;color:#ccc;flex:1}
+.img-dl-btn{background:rgba(0,217,255,0.15);color:#00d9ff;border:1px solid rgba(0,217,255,0.5);border-radius:8px;padding:.35rem .9rem;font-size:.78rem;cursor:pointer;transition:all .2s;white-space:nowrap;display:flex;align-items:center;gap:.3rem}
+.img-dl-btn:hover{background:rgba(0,217,255,0.3);transform:scale(1.03)}
+
+.score-cols{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem}
+.score-card{padding:.8rem;border-radius:10px;margin-bottom:.5rem;display:flex;align-items:center;gap:.8rem}
+.score-card-high{background:linear-gradient(90deg,rgba(0,255,136,0.1),transparent)}
+.score-card-low{background:linear-gradient(90deg,rgba(255,107,107,0.1),transparent)}
+.score-rank{font-size:1.4rem;min-width:2rem;text-align:center}
+.score-name{flex:1;font-weight:600;font-size:.9rem}
+.score-num-high{font-size:1.1rem;color:#00ff88;font-weight:700}
+.score-num-low{font-size:1.1rem;color:#ff6b6b;font-weight:700}
+.data-table-wrap{overflow-x:auto;max-height:500px;overflow-y:auto}
+.data-table{width:100%;border-collapse:collapse;font-size:.85rem}
+.data-table th{position:sticky;top:0;background:rgba(0,0,0,0.6);color:#fff;padding:.7rem 1rem;text-align:left;font-weight:600;white-space:nowrap;border-bottom:1px solid rgba(255,255,255,0.1)}
+.data-table td{color:#e0e0e0;padding:.6rem 1rem;border-bottom:1px solid rgba(255,255,255,0.04);white-space:nowrap}
+.data-table tr:hover td{background:rgba(255,255,255,0.04)}
+.dl-btn{margin-top:1rem;background:rgba(0,217,255,0.15);color:#00d9ff;border:1px solid #00d9ff;padding:.5rem 1.4rem;border-radius:10px;cursor:pointer;font-size:.88rem;transition:all .2s}
+.dl-btn:hover{background:rgba(0,217,255,0.3)}
+.footer{text-align:center;color:#aaa;padding:2rem 1rem;font-size:.85rem;line-height:2}
+.empty-state{text-align:center;padding:3rem;color:#aaa}
+.empty-state .icon{font-size:3rem;margin-bottom:1rem}
+.section-title{font-size:1rem;font-weight:700;color:#fff;margin:1rem 0 .6rem}
+</style>
+</head>
+<body>
+<div class="app-wrapper">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-title">🔍 Filter Conditions</div>
+    <hr class="sidebar-divider">
+    <div>
+      <div class="filter-label">📂 Import Excel Files</div>
+      <div class="upload-section">
+        <h3>一键导入四个 Excel</h3>
+        <p>支持同时选择多个文件<br>（至本/逐本 × 洗面奶/卸妆膏）</p>
+        <label class="upload-btn" for="fileInput">选择文件</label>
+        <input type="file" id="fileInput" accept=".xlsx,.xls" multiple>
+        <div class="file-status">
+          <div id="fs_zb_xmn">至本_洗面奶：<span class="file-missing">未导入</span></div>
+          <div id="fs_zb_zxg">至本_卸妆膏：<span class="file-missing">未导入</span></div>
+          <div id="fs_zbn_xmn">逐本_洗面奶：<span class="file-missing">未导入</span></div>
+          <div id="fs_zbn_zxg">逐本_卸妆膏：<span class="file-missing">未导入</span></div>
+        </div>
+      </div>
+    </div>
+    <hr class="sidebar-divider">
+    <div class="filter-label">Month</div>
+    <select class="filter-select" id="sel_month">
+      <option value="全部">全部</option>
+      <option value="1">1月</option><option value="2">2月</option>
+      <option value="3">3月</option><option value="4">4月</option>
+    </select>
+    <div class="filter-label">Product Name</div>
+    <select class="filter-select" id="sel_brand">
+      <option value="至本">至本</option>
+      <option value="逐本">逐本</option>
+    </select>
+    <div class="filter-label">Product Type</div>
+    <select class="filter-select" id="sel_product">
+      <option value="全部">全部</option>
+      <option value="洗面奶">洗面奶</option>
+      <option value="卸妆膏">卸妆膏</option>
+    </select>
+    <div class="filter-label">Attribute</div>
+    <select class="filter-select" id="sel_attr">
+      <option value="全部">全部</option>
+      <option value="商品属性">商品属性</option>
+      <option value="购物流程体验">购物流程体验</option>
+      <option value="客户感知与体验">客户感知与体验</option>
+    </select>
+    <hr class="sidebar-divider">
+    <div class="sidebar-title" style="font-size:.95rem">Current Filter</div>
+    <div class="filter-summary">
+      <div><strong>Month:</strong> <span id="fs_month">全部</span></div>
+      <div><strong>Brand:</strong> <span id="fs_brand">至本</span></div>
+      <div><strong>Product:</strong> <span id="fs_product">全部</span></div>
+      <div><strong>Attribute:</strong> <span id="fs_attr">全部</span></div>
+    </div>
+    <hr class="sidebar-divider">
+    <div class="sidebar-title" style="font-size:.95rem">Dimension Legend</div>
+    <div class="legend-tags">
+      <span class="tag tag-logistics">Shopping Experience</span>
+      <span class="tag tag-goods">Product Attribute</span>
+      <span class="tag tag-perception">Customer Perception</span>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main-content">
+    <h1 class="main-title">Customer Review Analysis Platform</h1>
+    <p class="main-sub">Multi-dimensional Review Sentiment Visualization</p>
+    <div class="metrics-grid">
+      <div class="metric-card"><div class="metric-value" id="m_reviews">—</div><div class="metric-label">Reviews</div></div>
+      <div class="metric-card"><div class="metric-value" id="m_avgscore">—</div><div class="metric-label">Avg Score</div></div>
+      <div class="metric-card"><div class="metric-value" id="m_mentions">—</div><div class="metric-label">Mentions</div></div>
+      <div class="metric-card"><div class="metric-value" id="m_dims">—</div><div class="metric-label">Active Dims</div></div>
+    </div>
+    <hr class="section-divider">
+    <div id="chartArea">
+      <div class="empty-state"><div class="icon">📊</div><p>请先导入 Excel 文件，然后开始分析</p></div>
+    </div>
+    <div class="footer">
+      <p>Customer Review Analysis Platform | Updated <span id="updateDate"></span></p>
+      <p style="font-size:.75rem;color:#666">Multi-dimensional sentiment visualization tool</p>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── CONSTANTS ──────────────────────────────────────────────
+const LEVEL3_BY_PRODUCT = {
+  "洗面奶":["商品描述准确性","价格合理性","物流时效","包装完整性","客服服务质量",
+    "清洁力表现","温和度表现","洗后肤感","泡沫表现","气味表现",
+    "成分安全性","使用效果","肤质适配性","整体满意度","复购及推荐意愿"],
+  "卸妆膏":["卸妆力","乳化速度","温和度","膏体质地","气味舒适度","洗后肤感",
+    "包装设计","使用便利性","价格合理性","物流时效","客服服务质量",
+    "商品描述准确性","整体满意度","复购及推荐意愿"]
+};
+const LEVEL1_MAP={
+  "商品描述准确性":"购物流程体验","价格合理性":"购物流程体验","物流时效":"购物流程体验",
+  "包装完整性":"购物流程体验","客服服务质量":"购物流程体验","包装设计":"购物流程体验","使用便利性":"购物流程体验",
+  "清洁力表现":"商品属性","温和度表现":"商品属性","温和度":"商品属性","洗后肤感":"商品属性",
+  "泡沫表现":"商品属性","气味表现":"商品属性","成分安全性":"商品属性","使用效果":"商品属性",
+  "肤质适配性":"商品属性","卸妆力":"商品属性","乳化速度":"商品属性","膏体质地":"商品属性","气味舒适度":"商品属性",
+  "整体满意度":"客户感知与体验","复购及推荐意愿":"客户感知与体验"
+};
+const LEVEL2_MAP={
+  "商品描述准确性":"购前体验","价格合理性":"购中体验","物流时效":"购后体验",
+  "包装完整性":"购后体验","客服服务质量":"购后体验","包装设计":"购前体验","使用便利性":"购中体验",
+  "清洁力表现":"核心功效","温和度表现":"核心功效","温和度":"核心功效","洗后肤感":"使用肤感",
+  "泡沫表现":"使用肤感","气味表现":"使用肤感","成分安全性":"安全保障","使用效果":"效果适配",
+  "肤质适配性":"效果适配","卸妆力":"核心功效","乳化速度":"核心功效","膏体质地":"使用肤感",
+  "气味舒适度":"使用肤感","整体满意度":"价值感知","复购及推荐意愿":"决策与推荐"
+};
+const COLOR_MAP={"购物流程体验":"#ffb142","商品属性":"#ff6b6b","客户感知与体验":"#00d9ff"};
+
+// ── STATE ──────────────────────────────────────────────────
+let allData={};
+
+// ── FILE UPLOAD ────────────────────────────────────────────
+const statusMap={'至本_洗面奶':'fs_zb_xmn','至本_卸妆膏':'fs_zb_zxg','逐本_洗面奶':'fs_zbn_xmn','逐本_卸妆膏':'fs_zbn_zxg'};
+
+function detectKey(filename){
+  const n=filename.replace(/[_\s]/g,'');
+  if(n.includes('至本')&&n.includes('洗面奶'))return'至本_洗面奶';
+  if(n.includes('至本')&&n.includes('卸妆膏'))return'至本_卸妆膏';
+  if(n.includes('逐本')&&n.includes('洗面奶'))return'逐本_洗面奶';
+  if(n.includes('逐本')&&n.includes('卸妆膏'))return'逐本_卸妆膏';
+  return null;
+}
+
+document.getElementById('fileInput').addEventListener('change',async function(e){
+  for(const file of Array.from(e.target.files)){
+    const key=detectKey(file.name);
+    if(!key){alert('无法识别: '+file.name+'\n文件名需含品牌(至本/逐本)和产品(洗面奶/卸妆膏)');continue;}
+    const rows=await parseExcel(file,key);
+    allData[key]=rows;
+    const el=document.getElementById(statusMap[key]);
+    if(el)el.innerHTML=key+'：<span class="file-ok">✓ 已导入 '+rows.length+' 条</span>';
+  }
+  renderAll();
+});
+
+function parseExcel(file,key){
+  return new Promise(resolve=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:null});
+      const [brand,ptype]=key.split('_');
+      rows.forEach(r=>{r['品牌']=brand;r['产品类型']=ptype;});
+      resolve(rows);
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+// ── FILTERS ────────────────────────────────────────────────
+function getFiltered(){
+  const brand=document.getElementById('sel_brand').value;
+  const product=document.getElementById('sel_product').value;
+  const month=document.getElementById('sel_month').value;
+  let rows=[];
+  for(const v of Object.values(allData))if(v)rows=rows.concat(v);
+  rows=rows.filter(r=>r['品牌']===brand);
+  if(product!=='全部')rows=rows.filter(r=>r['产品类型']===product);
+  if(month!=='全部'){
+    const m=parseInt(month);
+    rows=rows.filter(r=>{
+      const dt=r['评论日期时间'];
+      if(dt){const d=new Date(dt);if(!isNaN(d.getTime()))return d.getMonth()+1===m;}
+      return true;
+    });
+  }
+  return rows;
+}
+
+// ── DIM SCORE CALC ─────────────────────────────────────────
+function calcDimScores(rows,productType,attrFilter){
+  const dims=LEVEL3_BY_PRODUCT[productType]||[];
+  const results=[];
+  for(const dim of dims){
+    let scores=[];
+    for(const r of rows){
+      const mention=parseFloat(r[dim+'_是否提及']);
+      const score=parseFloat(r[dim+'_情绪评分']);
+      if(mention===1&&!isNaN(score))scores.push(score);
+    }
+    const avg=scores.length>0?scores.reduce((a,b)=>a+b,0)/scores.length:0;
+    results.push({
+      维度:dim,'Level 1':LEVEL1_MAP[dim]||'其他','Level 2':LEVEL2_MAP[dim]||'其他',
+      平均情绪评分:avg,提及次数:scores.length,'提及率(%)':rows.length>0?scores.length/rows.length*100:0
+    });
+  }
+  if(attrFilter&&attrFilter!=='全部')return results.filter(d=>d['Level 1']===attrFilter);
+  return results;
+}
+
+function calcAllDimScores(rows,attrFilter){
+  const wash=rows.filter(r=>r['产品类型']==='洗面奶');
+  const clean=rows.filter(r=>r['产品类型']==='卸妆膏');
+  const combined=[...calcDimScores(wash,'洗面奶',attrFilter),...calcDimScores(clean,'卸妆膏',attrFilter)];
+  const map={};
+  for(const d of combined){
+    if(!map[d.维度])map[d.维度]={...d,_n:1};
+    else{map[d.维度].平均情绪评分+=d.平均情绪评分;map[d.维度].提及次数+=d.提及次数;map[d.维度]['提及率(%)']+=d['提及率(%)'];map[d.维度]._n++;}
+  }
+  return Object.values(map).map(d=>({维度:d.维度,'Level 1':d['Level 1'],'Level 2':d['Level 2'],平均情绪评分:d.平均情绪评分/d._n,提及次数:d.提及次数,'提及率(%)':d['提及率(%)']/d._n}));
+}
+
+// ── METRICS ────────────────────────────────────────────────
+// Reviews/AvgScore/Mentions: NOT affected by Attribute filter
+// Active Dims: affected by Attribute filter
+function updateMetrics(rows, dimScoresAll, dimScoresFiltered){
+  document.getElementById('m_reviews').textContent=rows.length;
+  const allScores=dimScoresAll.map(d=>d.平均情绪评分).filter(v=>!isNaN(v)&&v>0);
+  document.getElementById('m_avgscore').textContent=(allScores.length>0?allScores.reduce((a,b)=>a+b,0)/allScores.length:0).toFixed(2);
+  document.getElementById('m_mentions').textContent=dimScoresAll.reduce((s,d)=>s+d.提及次数,0);
+  document.getElementById('m_dims').textContent=dimScoresFiltered.filter(d=>d.提及次数>0).length;
+}
+
+// ── CHART DOWNLOAD ─────────────────────────────────────────
+function downloadPlot(divId, filename){
+  const el=document.getElementById(divId);
+  if(!el)return;
+  Plotly.toImage(el,{format:'png',width:1200,height:el.offsetHeight||500,scale:2})
+    .then(url=>{
+      const a=document.createElement('a');
+      a.href=url; a.download=(filename||divId)+'.png';
+      document.body.appendChild(a);a.click();document.body.removeChild(a);
+    });
+}
+
+// ── PLOTLY BASE ────────────────────────────────────────────
+const PB={paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',font:{color:'white'}};
+
+function renderRadar(ds,title,cid){
+  const byL1={};
+  for(const d of ds){if(!byL1[d['Level 1']])byL1[d['Level 1']]=[];byL1[d['Level 1']].push(d);}
+  const traces=[];
+  for(const[l1,items]of Object.entries(byL1)){
+    const hex=COLOR_MAP[l1]||'#888';
+    const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+    const theta=items.map(d=>d.维度).concat([items[0].维度]);
+    const rv=items.map(d=>d.平均情绪评分).concat([items[0].平均情绪评分]);
+    traces.push({type:'scatterpolar',r:rv,theta,fill:'toself',fillcolor:`rgba(${r},${g},${b},0.2)`,line:{color:hex,width:2},name:l1,hovertemplate:'<b>%{theta}</b><br>Score: %{r:.2f}<extra></extra>'});
+  }
+  Plotly.newPlot(cid,traces,{...PB,title:{text:title,font:{size:16,color:'white'},x:.5},polar:{radialaxis:{visible:true,range:[0,1],tickfont:{size:9,color:'white'},gridcolor:'rgba(255,255,255,0.1)'},angularaxis:{tickfont:{size:10,color:'white'},gridcolor:'rgba(255,255,255,0.1)'}},showlegend:true,legend:{bgcolor:'rgba(0,0,0,0)',font:{color:'white',size:11},yanchor:'top',y:.99,xanchor:'left',x:1.02},height:480,margin:{l:80,r:120,t:70,b:60}},{responsive:true,displayModeBar:false});
+}
+
+function renderBar(ds,title,cid){
+  const s=[...ds].sort((a,b)=>a.平均情绪评分-b.平均情绪评分);
+  Plotly.newPlot(cid,[{type:'bar',x:s.map(d=>d.维度),y:s.map(d=>d.平均情绪评分),marker:{color:s.map(d=>COLOR_MAP[d['Level 1']]||'#888')},text:s.map(d=>d.平均情绪评分.toFixed(2)),textposition:'outside',textfont:{color:'white',size:10},hovertemplate:'<b>%{x}</b><br>Score: %{y:.2f}<extra></extra>'}],{...PB,title:{text:title,font:{size:16,color:'white'},x:.5},xaxis:{tickfont:{color:'white',size:9},gridcolor:'rgba(255,255,255,0.05)',tickangle:-45},yaxis:{range:[0,1.2],tickfont:{color:'white'},gridcolor:'rgba(255,255,255,0.1)',title:{text:'Sentiment Score (0-1)',font:{color:'white'}}},showlegend:false,height:380,margin:{l:60,r:20,t:60,b:130}},{responsive:true,displayModeBar:false});
+}
+
+function renderHeatmap(ds,title,cid){
+  const l1s=[...new Set(ds.map(d=>d['Level 1']))];
+  const l2s=[...new Set(ds.map(d=>d['Level 2']))];
+  const z=l2s.map(l2=>l1s.map(l1=>{const m=ds.filter(d=>d['Level 2']===l2&&d['Level 1']===l1);return m.length?m.reduce((a,b)=>a+b.平均情绪评分,0)/m.length:null;}));
+  const txt=z.map(row=>row.map(v=>v!==null?v.toFixed(2):'-'));
+  Plotly.newPlot(cid,[{type:'heatmap',z,x:l1s,y:l2s,colorscale:[[0,'#1a1a2e'],[.3,'#16213e'],[.5,'#0f3460'],[.7,'#e94560'],[1,'#00ff88']],text:txt,texttemplate:'%{text}',textfont:{color:'white',size:13},hovertemplate:'<b>%{y}</b> - %{x}<br>Score: %{z:.2f}<extra></extra>',showscale:true}],{...PB,title:{text:title,font:{size:16,color:'white'},x:.5},xaxis:{side:'top',tickfont:{color:'white'}},yaxis:{tickfont:{color:'white'},autorange:'reversed'},height:340,margin:{l:140,r:50,t:90,b:40}},{responsive:true,displayModeBar:false});
+}
+
+function renderMentionBar(ds,cid){
+  const s=[...ds].sort((a,b)=>b['提及率(%)']-a['提及率(%)']);
+  Plotly.newPlot(cid,[{type:'bar',x:s.map(d=>d.维度),y:s.map(d=>d['提及率(%)']),marker:{color:s.map(d=>COLOR_MAP[d['Level 1']]||'#888')},hovertemplate:'<b>%{x}</b><br>Mention Rate: %{y:.1f}%<extra></extra>'}],{...PB,title:{text:'Dimension Mention Frequency',font:{size:15,color:'white'},x:.5},xaxis:{tickfont:{color:'white',size:9},tickangle:-45},yaxis:{tickfont:{color:'white'},gridcolor:'rgba(255,255,255,0.1)',title:{text:'Mention Rate (%)',font:{color:'white'}}},showlegend:false,height:370,margin:{l:60,r:20,t:60,b:130}},{responsive:true,displayModeBar:false});
+}
+
+// ── SCORE CARDS ────────────────────────────────────────────
+function renderScoreCards(ds){
+  const s=[...ds].sort((a,b)=>b.平均情绪评分-a.平均情绪评分);
+  document.getElementById('top3Cards').innerHTML=s.slice(0,3).map((d,i)=>`<div class="score-card score-card-high"><span class="score-rank">${['🥇','🥈','🥉'][i]}</span><span class="score-name">${d.维度}</span><span class="score-num-high">${d.平均情绪评分.toFixed(3)}</span></div>`).join('');
+  document.getElementById('bot3Cards').innerHTML=[...s].reverse().slice(0,3).map((d,i)=>`<div class="score-card score-card-low"><span class="score-rank" style="font-size:1rem">${i+1}</span><span class="score-name">${d.维度}</span><span class="score-num-low">${d.平均情绪评分.toFixed(3)}</span></div>`).join('');
+}
+
+// ── TABLE with score cell background gradient ─────────────
+function scoreToColor(v){
+  // v range roughly -1 to 1; map to red↔green
+  // clamp to [-1,1]
+  const clamped=Math.max(-1,Math.min(1,v));
+  if(clamped>=0){
+    // 0→orange, 1→green
+    const t=clamped; // 0..1
+    const r=Math.round(255*(1-t)*0.8);
+    const g=Math.round(180+75*t);
+    const b=Math.round(40*(1-t));
+    return `rgba(${r},${g},${b},0.35)`;
+  } else {
+    // -1→deep red, 0→slight red
+    const t=-clamped; // 0..1
+    const r=Math.round(180+75*t);
+    const g=Math.round(60*(1-t));
+    const b=Math.round(30*(1-t));
+    return `rgba(${r},${g},${b},0.35)`;
+  }
+}
+
+function scoreTextColor(v){
+  // 根据背景色亮度决定文字颜色
+  if(v>=0.5)return '#1a1a2e'; // 深色背景用深色文字
+  return '#ffffff'; // 浅色背景用白色文字
+}
+
+function renderTable(ds){
+  const headers=['维度','Level 1','Level 2','平均情绪评分','提及次数','提及率(%)'];
+  let html='<table class="data-table"><thead><tr>';
+  headers.forEach(h=>{html+=`<th>${h}</th>`;});
+  html+='</tr></thead><tbody>';
+  for(const d of ds){
+    const v=d.平均情绪评分;
+    const bg=scoreToColor(v);
+    // 文字颜色：高评分用深色（背景偏绿/橙），低评分用白色（背景偏红）
+    const tc=scoreTextColor(v);
+    html+=`<tr>
+      <td>${d.维度}</td>
+      <td style="color:${COLOR_MAP[d['Level 1']]||'#fff'}">${d['Level 1']}</td>
+      <td>${d['Level 2']}</td>
+      <td style="background:${bg};color:${tc};font-weight:700;text-align:center;border-radius:6px">${v.toFixed(3)}</td>
+      <td>${d.提及次数}</td>
+      <td>${d['提及率(%)'].toFixed(1)}%</td>
+    </tr>`;
+  }
+  html+='</tbody></table>';
+  document.getElementById('dataTableWrap').innerHTML=html;
+}
+
+// ── CSV EXPORT ─────────────────────────────────────────────
+function exportCSV(brand,ptype){
+  const ds=window.__dimScores;if(!ds)return;
+  let csv='\uFEFF维度,Level 1,Level 2,平均情绪评分,提及次数,提及率(%)\n';
+  ds.forEach(d=>{csv+=`${d.维度},${d['Level 1']},${d['Level 2']},${d.平均情绪评分.toFixed(4)},${d.提及次数},${d['提及率(%)'].toFixed(2)}\n`;});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
+  a.download=brand+'_'+ptype+'_analysis.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+}
+
+// ── DOWNLOAD BTN HELPER ────────────────────────────────────
+function dlBtn(divId, label){
+  return `<button class="img-dl-btn" onclick="downloadPlot('${divId}','${label}')">⬇️ 下载图片</button>`;
+}
+
+// ── MAIN RENDER ────────────────────────────────────────────
+function renderAll(){
+  updateFilterSummary();
+  if(!Object.keys(allData).length){
+    document.getElementById('chartArea').innerHTML='<div class="empty-state"><div class="icon">📊</div><p>请先导入 Excel 文件，然后开始分析</p></div>';
+    ['m_reviews','m_avgscore','m_mentions','m_dims'].forEach(id=>document.getElementById(id).textContent='—');
+    return;
+  }
+
+  const rows=getFiltered();
+  const product=document.getElementById('sel_product').value;
+  const brand=document.getElementById('sel_brand').value;
+  const attr=document.getElementById('sel_attr').value;
+
+  // dimScores WITH attr filter → for charts & Active Dims
+  const dimScores = product==='全部'
+    ? calcAllDimScores(rows, attr)
+    : calcDimScores(rows.filter(r=>r['产品类型']===product), product, attr);
+
+  // dimScoresAll WITHOUT attr filter → for Reviews/AvgScore/Mentions
+  const dimScoresAll = product==='全部'
+    ? calcAllDimScores(rows, '全部')
+    : calcDimScores(rows.filter(r=>r['产品类型']===product), product, '全部');
+
+  if(rows.length>0) updateMetrics(rows, dimScoresAll, dimScores);
+  else ['m_reviews','m_avgscore','m_mentions','m_dims'].forEach(id=>document.getElementById(id).textContent='0');
+
+  if(!dimScores.length){
+    document.getElementById('chartArea').innerHTML='<div class="empty-state"><div class="icon">🔍</div><p>当前筛选条件下无数据，请调整筛选项</p></div>';
+    return;
+  }
+
+  const radarTitle=brand+' '+(product!=='全部'?product:'')+(attr!=='全部'?' - '+attr:' All Attributes');
+  window.__dimScores=dimScores;
+  window.__brand=brand;
+  window.__product=product;
+
+  document.getElementById('chartArea').innerHTML=`
+    <div class="tabs-nav">
+      <button class="tab-btn active" onclick="switchTab(this,'tab_radar')">📡 Radar Chart</button>
+      <button class="tab-btn" onclick="switchTab(this,'tab_bar')">📊 Bar Chart</button>
+      <button class="tab-btn" onclick="switchTab(this,'tab_heat')">🌡 Heatmap</button>
+      <button class="tab-btn" onclick="switchTab(this,'tab_data')">📋 Detailed Data</button>
+    </div>
+
+    <div id="tab_radar" class="tab-panel active">
+      <div class="chart-container">
+        <div class="chart-header">
+          <span class="chart-header-title">Radar Chart</span>
+          ${dlBtn('plotRadar','雷达图_'+brand+'_'+product)}
+        </div>
+        <div id="plotRadar"></div>
+      </div>
+    </div>
+
+    <div id="tab_bar" class="tab-panel">
+      <div class="chart-container">
+        <div class="chart-header">
+          <span class="chart-header-title">Bar Chart</span>
+          ${dlBtn('plotBar','柱状图_'+brand+'_'+product)}
+        </div>
+        <div id="plotBar"></div>
+        <div class="score-cols">
+          <div>
+            <div class="section-title">🏆 Top 3 High Scores</div>
+            <div id="top3Cards"></div>
+          </div>
+          <div>
+            <div class="section-title">⚠️ Bottom 3 Low Scores</div>
+            <div id="bot3Cards"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab_heat" class="tab-panel">
+      <div class="chart-container">
+        <div class="chart-header">
+          <span class="chart-header-title">Heatmap</span>
+          ${dlBtn('plotHeat','热力图_'+brand+'_'+product)}
+        </div>
+        <div id="plotHeat"></div>
+        <div class="section-title" style="margin-top:1.2rem">📈 Mention Rate Analysis</div>
+        <div class="chart-header" style="margin-top:.4rem">
+          <span class="chart-header-title"></span>
+          ${dlBtn('plotMention','提及率图_'+brand+'_'+product)}
+        </div>
+        <div id="plotMention"></div>
+      </div>
+    </div>
+
+    <div id="tab_data" class="tab-panel">
+      <div class="chart-container">
+        <div class="section-title">📋 Detailed Data</div>
+        <div class="data-table-wrap" id="dataTableWrap"></div>
+        <button class="dl-btn" onclick="exportCSV(window.__brand, window.__product)">⬇️ Export to CSV</button>
+      </div>
+    </div>
+  `;
+
+  renderRadar(dimScores, radarTitle, 'plotRadar');
+  renderBar(dimScores, 'Dimension Scores (Low to High)', 'plotBar');
+  renderHeatmap(dimScores, 'Level 1 × Level 2 Score Heatmap', 'plotHeat');
+  renderMentionBar(dimScores, 'plotMention');
+  renderScoreCards(dimScores);
+  renderTable(dimScores);
+}
+
+function switchTab(btn,tabId){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(tabId).classList.add('active');
+  setTimeout(()=>{['plotRadar','plotBar','plotHeat','plotMention'].forEach(id=>{const el=document.getElementById(id);if(el&&el._fullLayout)Plotly.Plots.resize(el);});},50);
+}
+
+function updateFilterSummary(){
+  const month=document.getElementById('sel_month').value;
+  document.getElementById('fs_month').textContent=month==='全部'?'全部':month+'月';
+  document.getElementById('fs_brand').textContent=document.getElementById('sel_brand').value;
+  document.getElementById('fs_product').textContent=document.getElementById('sel_product').value;
+  document.getElementById('fs_attr').textContent=document.getElementById('sel_attr').value;
+}
+
+['sel_month','sel_brand','sel_product','sel_attr'].forEach(id=>{
+  document.getElementById(id).addEventListener('change',renderAll);
+});
+
+document.getElementById('updateDate').textContent=new Date().toISOString().split('T')[0];
+updateFilterSummary();
+</script>
+</body>
+</html>
